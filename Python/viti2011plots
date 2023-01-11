@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar  4 10:56:33 2022
+
+@author: neerbos
+
+need to run a loop and save several different files.
+"""
+import uclchem
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+#set a parameter dictionary for phase 1 collapse model
+pc,year=30.9E12,3.15e7 #km, s resp
+name,vs,density="J",35,100000.0
+av,crir,uv=2,1,1
+
+alldensity=[1e3,1e4,1e5,1e6]
+allv=[10,15,20,25,30,35,40,45,50,55,60]
+allvisex=[1,2,5,10]
+allcrir=[0.1,1,10,100] #crir=cosmic ray ion rate, visex=visual extinction
+alluv=[0.1,1,10,100]
+#uclchem.run_model(param_dict)
+
+def abundens(vs,density,av,crir,uv,save=False):
+    for name in ["C"]:
+        file="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+        phase2_df=uclchem.read_output_file(file)
+        species=["NH3","CH3OH","H2CO","H2O",]
+        try:
+            print(np.max(np.where((phase2_df["Time"])>=1E6)))
+        except:
+            print("no")
+        fig,[ax,ax2]=plt.subplots(2,1,figsize=(16,9))
+        ax=uclchem.plot_species(ax,phase2_df,species)
+        settings=ax.set(yscale="log",xscale="log",
+                    xlabel="time in yr", 
+                    ylabel="X$_{Species}$",
+                    xlim=(1,1E5))
+        ax4=ax.twiny()
+        ax.grid()
+        ax4.plot(phase2_df["Time"]*year*vs*1E5,phase2_df["HCL"],alpha=0)
+        ax4.set(xlabel="z(cm)",xscale="log",yscale="log",xlim=(year*vs*1E5,1E5*year*vs*1E5))
+        ax2.plot(phase2_df["Time"],phase2_df["Density"],color="black")
+        ax3=ax2.twinx()
+        ax3.plot(phase2_df["Time"],phase2_df["gasTemp"],color="red")
+        ax2.set(xlabel="Time / year",ylabel="Density")
+        ax3.set(ylabel="Temperature",facecolor="red",xscale="log",yscale = "log",xlim=(1,1E5))
+        ax3.tick_params(axis='y', colors='red')
+        ax2.grid()
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        text="shock:{} \nspeed:{} km/s \ndensity:10^{} $n_H$/cm^3\nvisex:{} \ncrir:{} * standard\nuv:{} Ha".format(name,vs,np.log10(density),av,crir,uv)
+        ax2.text(0.7,-0.5,text,transform=ax.transAxes, fontsize=14,
+                verticalalignment='top', bbox=props)
+        if save:
+            plt.savefig("figs/viti2011_{}:{}-{}-{}-{}-{}.png".format(name,vs,int(density),av,crir,uv))
+        else:
+            plt.show()
+#for density in alldensity:
+#    abundens(vs,density,av,crir,uv,save=False)
+abundens(40,100000.0,av,crir,uv,save=True)
+abundens(35,100000.0,av,crir,uv,save=True)
+abundens(40,10000.0,av,crir,uv,save=True)

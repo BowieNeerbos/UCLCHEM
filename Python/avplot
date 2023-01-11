@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar  4 10:56:33 2022
+
+@author: neerbos
+
+need to run a loop and save several different files.
+"""
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+#set a parameter dictionary for phase 1 collapse model
+
+
+name,vs,density="C",45,10000.0
+av,crir,uv=2,1,1
+phase=1  #1 for collapse, 2 for shock
+
+pc,year=30.9E12,3.15e7 #km, s resp
+alldensity=[1e3,1e4,1e5,1e6]
+allv=[10,15,20,25,30,35,40,45,50,55,60]
+allvisex=[1,2,5,10]
+allcrir=[0.1,1,10,100] #crir=cosmic ray ion rate, visex=visual extinction
+alluv=[0.1,1,10,100]
+#uclchem.run_model(param_dict)
+def read_output_file(output_file):
+	"""
+	Read the output of a UCLCHEM run created with the outputFile parameter into a pandas DataFrame
+
+	:param output_file: - (str) path to file containing a full UCLCHEM output
+
+	:return: (dataframe) A dataframe containing the abundances and physical parameters of the model at every time step.
+	"""
+	f=open(output_file)
+	f.readline()
+	bits=f.readline().split()
+	radfield=float(bits[1])
+	zeta=float(bits[3])
+	data=pd.read_csv(f)
+	data["zeta"]=zeta
+	data["radfield"]=radfield
+	data.columns=data.columns.str.strip()
+	return data
+def abundens(vs,density,av,crir,uv,save=False):
+    for name in ["C","J"]:
+        file="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+        phase2_df=file
+        species=["NH3","CH3OH","H2CO","H2O",]
+        try:
+            print(np.max(np.where((phase2_df["Time"])>=1E6)))
+        except:
+            print("no")
+        fig,[ax,ax2]=plt.subplots(2,1,figsize=(16,9))
+        ax=plt.plot(ax,phase2_df,species)
+        ax4=ax.twiny()
+        ax.grid()
+        ax4.plot(phase2_df["Time"]*year*vs/pc,phase2_df["HCL"],alpha=0)
+        ax4.set(xlabel="zn/pc",xscale="log",yscale="log",xlim=(year*vs/pc,1E5*year*vs/pc))
+        ax2.plot(phase2_df["Time"],phase2_df["Density"],color="black")
+        ax3=ax2.twinx()
+        ax3.plot(phase2_df["Time"],phase2_df["gasTemp"],color="red")
+        ax2.set(xlabel="Time / year",ylabel="Density")
+        ax3.set(ylabel="Temperature",facecolor="red",xscale="log",yscale = "log",xlim=(1,1E5))
+        ax3.tick_params(axis='y', colors='red')
+        ax2.grid()
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        text="shock:{} \nspeed:{} km/s \ndensity:10^{} $n_H$/cm^3\nvisex:{} \ncrir:{} * standard\nuv:{} Ha".format(name,vs,np.log10(density),av,crir,uv)
+        ax2.text(0.7,-0.5,text,transform=ax.transAxes, fontsize=14,
+                verticalalignment='top', bbox=props)
+        if save:
+            plt.savefig("figs/abundens_{}:{}-{}-{}-{}-{}.png".format(name,vs,int(density),av,crir,uv))
+        else:
+            plt.show()
+            
+def plotav(name,vs,density,av,crir,uv,phase=2):
+    if phase == 1:
+        file="../output/collapse_outputs/{}.dat".format(density)
+    else:
+        file="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+    phase2_df=read_output_file(file)
+    plt.plot(phase2_df["Time"][1:],phase2_df["av"][1:].astype(float))
+    
+    plt.ylabel("Av")
+    plt.xlabel("time in years")
+    if phase == 1:
+        plt.title("Av during collapse to dens:{}".format(density))
+    else:
+        plt.title("Av of {}:{}-{}-{}-{}-{}".format(name,vs,density,av,crir,uv))
+        plt.xscale("log")
+    plt.show()
+
+plotav(name,vs,density,av,crir,uv,phase)
+#for density in alldensity:
+#    abundens(vs,density,av,crir,uv,save=False)
+

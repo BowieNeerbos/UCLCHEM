@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue May 17 12:04:47 2022
+
+@author: neerbos
+"""
+import uclchem
+
+
+pc,year=30.9E17,3.15e7 #in cm, s
+outSpecies="SO CO"
+
+alldensity=[1e6,1e5,1e4,1e3]
+param_dict = {"phase": 1, "switch": 0, "collapse": 1, "writeStep": 1,
+				   "outSpecies": outSpecies, "initialDens": 1e2, "initialTemp":10.0,
+				   "maxTemp":1e5, "finalTime":6.0e6, "radfield" : 1.0,
+				   "zeta" : 1.0, "rout" : 0.05, "baseAv" : 1.0}
+def rout(density):
+    if density <= 1e4:
+        Av=10
+    else:
+        Av=30
+    #print(density,Av)
+    return 1.8*10**21*Av/(density*pc) #calculates the rout in pc corresponding to the desired density, 
+    #choose a fitting Av for that density (10/30 for 10^3-4 / 10^5-6  respectively)
+    
+def collapse():
+    for density in alldensity:            
+
+        param_dict["finalDens"]=density	#change for specific model no; 1e3,4,5 or 6
+        param_dict["rout"]=rout(density)
+        param_dict["outputFile"]="../output/collapse_outputs/{}(2).dat".format(density)
+        param_dict["abundSaveFile"]="../output/collapse_outputs/start{}(2).dat".format(density)
+        uclchem.run_model(param_dict)
+
+#collapse()
+for density in alldensity:    
+    print(density, rout(density))

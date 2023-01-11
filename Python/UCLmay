@@ -1,0 +1,239 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar  4 10:56:33 2022
+
+@author: neerbos
+"""
+import uclchem
+import pandas as pd
+import matplotlib.pyplot as plt
+import time as tm
+import numpy as np
+import smtplib as sp
+from multiprocessing import Pool
+import itertools
+sender="neerbos@mail.strw.leidenuniv.nl"
+rcvr="b.m.k.vanneerbos@outlook.com"
+start=tm.time()
+count=0
+f=open("/net/harbinger/data2/bowie/UCLCHEM/src/Makefile","r")
+for line in f:
+    if line.startswith("PHYSICS="):
+        module=line[8:-5]
+if module=="cshock":
+    name = "C"
+elif module =="jshock":
+    name = "J"
+else:
+    name = module
+print(name)
+#set a parameter dictionary for phase 1 collapse model
+pc,year=30.9E12,3.15e7 #in km, s
+outSpecies="SO CO"
+density,vs=1e3,30
+alldensity=[1e3,1e4,1e5,1e6]
+allv=[10,15,20,25,30,35,40,45,50,55,60]
+allcrir,allvisex=[0.1,1,10,100],[1,2,5,10] #crir=cosmic ray ion rate, visex=visual extinction
+alluv=[0.1,1,10,100] #in Habing
+param_dict = {"phase": 1, "switch": 0, "collapse": 1, "writeStep": 1,
+				   "outSpecies": outSpecies, "initialDens": 1e2, "initialTemp":10.0,
+				   "maxTemp":1e5, "finalTime":6.0e6, "radfield" : 1.0,
+				   "zeta" : 1.0, "rout" : 0.05, "baseAv" : 1.0,
+				   "outputFile":"../output/collapse_outputs/{}.dat".format(density),
+				   "abundSaveFile":"../output/collapse_outputs/start{}.dat".format(density)}
+
+
+def collapse():
+	for density in alldensity:            
+
+		param_dict["finalDens"]=density	#change for specific model no; 1e3,4,5 or 6
+		param_dict["vs"]=vs		#similar, shock speed in km/s
+		param_dict["outputFile"]="../output/collapse_outputs/{}.dat".format(density)
+		param_dict["abundSaveFile"]="../output/collapse_outputs/start{}.dat".format(density)
+		uclchem.run_model(param_dict)
+	phase1_df=uclchem.read_output_file("../output/collapse_outputs/{}.dat".format(density))
+#species=["CO","#CO","HCN","#HCN"]
+#param_dict.pop("abundSaveFile") #this is still set to startcollapse.dat from phase 1 so remove it or change it.
+
+
+def shocking(params,temp=3,finalTime=1e5):
+    global count
+    #read old abundances and do cshock behaviour
+    #allv,alldensity,allvisex,allcrir,alluv
+    vs,density,av,crir,uv=params[0],params[1],params[2],params[3],params[4]
+    param_dict["phase"]=2
+    rout = (av-param_dict["baseAv"])*1.6E21/(density*pc*1E5)
+    #change other bits of input to set up phase 2
+    param_dict["initialDens"]=density
+    param_dict["vs"]=vs		#similar, shock speed in km/s
+    param_dict["tempindx"]=temp #selects mass of protostar (see cloud.f90)
+    param_dict["finalTime"]=finalTime
+    param_dict["rout"]=rout
+    param_dict["zeta"]=crir
+    param_dict["radfield"]=uv
+    param_dict["switch"]=0
+    param_dict["collapse"]=0
+    param_dict["abundLoadFile"]="../output/collapse_outputs/start{}.dat".format(density)
+    param_dict["outputFile"]="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+    #name scheme: ShockType:vs-density,av,crir,uv
+    #so eg: C:40-1000-5-0.1-10
+    file="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+    f=open(file)
+    print(type(f["Time"]))
+    try:
+        f=open(file)
+        #np.max(np.where(f["Time"]>=9E4))
+        f.close()
+        count+=1
+    except:
+        print("{}-{}-{}-{}-{}".format(vs,density,av,crir,uv))
+        print("{} files skipped".format(count))
+        count=0
+        uclchem.run_model(param_dict)
+
+def shocking2(alldensity,allv,temp=3,finalTime=1e5):
+    count=0
+    for density in alldensity:
+            for av in allvisex:
+                rout = (av-param_dict["baseAv"])*1.6E21/(density*pc*1E5)
+                for vs in allv:
+                    for crir in allcrir:
+                        for uv in alluv:
+                            #read old abundances and do cshock behaviour
+                            param_dict["phase"]=2
+
+                            #change other bits of input to set up phase 2
+                            param_dict["initialDens"]=density
+                            param_dict["vs"]=vs		#similar, shock speed in km/s
+                            param_dict["tempindx"]=temp #selects mass of protostar (see cloud.f90)
+                            param_dict["finalTime"]=finalTime
+                            param_dict["rout"]=rout
+                            param_dict["zeta"]=crir
+                            param_dict["radfield"]=uv
+                            param_dict["switch"]=0
+                            param_dict["collapse"]=0
+                            param_dict["abundLoadFile"]="../output/collapse_outputs/start{}.dat".format(density)
+                            param_dict["outputFile"]="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+                            #name scheme: ShockType:vs-density,av,crir,uv
+                            #so eg: C:40-1000-5-0.1-10
+                            file="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+                            try:
+                                f=open(file)
+                                f.close()
+                                count+=1
+                            except:
+                                print("{}-{}-{}-{}-{}".format(vs,density,av,crir,uv))
+                                print("{} files skipped".format(count))
+                                count=0
+                                uclchem.run_model(param_dict)
+
+
+def plotshocks(vs,density,plot=True):
+	param_dict["outputFile"]="../output/shock_outputs/{}-{}.dat".format(vs,density)
+	phase2_df=uclchem.read_output_file(param_dict["outputFile"])
+	species=["NH3","H2S","OCS","H2O","HCL","H2CS"]
+	phase2_df["Time"]=year*phase2_df["Time"]/(pc*vs)
+	fig,ax=plt.subplots()
+	ax.set_xlabel("zn/pc")
+	ax.set_ylabel("X$_{species}$")
+	ax2=ax.twinx()
+	ax2.set_ylabel("temperature (K)")
+	ax2.plot(phase2_df["Time"],phase2_df["gasTemp"],color="red",linestyle="dashed",label="temperature")
+	uclchem.plot_species(ax,phase2_df,species)
+	ax.set_title("abundances through shock")
+	end=12.0*vs/density
+	ax.set_xlim(0,end)
+	ax.set_ylim(1e-14,1e-3)
+	if plot:
+		plt.show()
+	fig,[ax,ax2]=plt.subplots(1,2,figsize=(16,9))
+	phase2_df["Time"]=phase2_df["Time"]*(pc*vs)/year
+	ax=uclchem.plot_species(ax,phase2_df,species)
+	settings=ax.set(yscale="log",
+				xlabel="Time / years", 
+				ylabel="Fractional Abundance",xscale="log")
+
+	ax2.plot(phase2_df["Time"],phase2_df["Density"],color="black")
+	ax3=ax2.twinx()
+	ax3.plot(phase2_df["Time"],phase2_df["gasTemp"],color="red")
+	ax2.set(xlabel="Time / year",ylabel="Density")
+	ax3.set(ylabel="Temperature",facecolor="red",xscale="log")
+	ax3.tick_params(axis='y', colors='red')
+	if plot:
+		plt.show()
+	
+def avgAbundance():
+	fig,[[ax1,ax2],[ax3,ax4]]=plt.subplots(2,2,figsize=(16,9))
+	axs=[ax1,ax2,ax3,ax4]
+	species=["NH3","CH3OH","OCS","H2S"]	
+	d=[]
+
+	colors=["red","blue","green","yellow"]
+	c=0
+	for density in alldensity:
+		for vs in allv:
+			param_dict["outputFile"]="../output/shock_outputs/{}-{}.dat".format(vs,density)
+			phase2_df=uclchem.read_output_file(param_dict["outputFile"])
+
+			t=phase2_df["Time"]
+			distance=year*t/(pc*vs) #in pc
+			dLength=12.0*vs/density
+			j,values=0,[]
+			for specname in species:
+				ax=axs[j]
+				nx,nh=0,0
+				for i in range(len(distance)-1):
+					if distance[i]<=dLength:
+						nx+=(t[i+1]-t[i])*phase2_df["Density"][i]*phase2_df[specname][i]
+						nh+=(t[i+1]-t[i])*phase2_df["Density"][i]
+				if {"s": specname,"dens":density,"v":0,"abun":phase2_df[specname][0]} not in d:
+					d.append({"s": specname,"dens":density,"v":0,"abun":phase2_df[specname][0]})
+				d.append({"s": specname,"dens":density,"v":vs,"abun":nx/nh})
+
+				j+=1
+	df=pd.DataFrame(d)
+	i=0
+	for ax in axs:
+		ax.set(yscale="log",title=species[i],xlim=(0,50),ylim=(1e-12,1e-4))
+		part=df.loc[df["s"]==species[i]]
+		for density in alldensity:
+			part2=part.loc[part["dens"]==density]
+			ax.plot(part2["v"],part2["abun"],label=density)
+		i+=1
+	print(df)
+	plt.legend()
+	fig.supylabel("X$_{species}$")
+	fig.supxlabel("V$_s (kms^{-1})$")
+	plt.show()
+
+def rungrid():
+    if __name__ == "__main__":
+         #indent  everything below line 206			
+        pc,year=30.9E12,3.15e7 #in km, s
+        outSpecies="SO CO"
+        density,vs=1e3,30
+        alldensity=[1e3,1e4,1e5,1e6]
+        allv=[10,15,20,25,30,35,40,45,50,55,60]
+        allcrir,allvisex=[0.1,1,10,100],[1,2,5,10] #crir=cosmic ray ion rate, visex=visual extinction
+        alluv=[0.1,1,10,100] #in Habing
+        param_dict = {"phase": 2, "switch": 0, "collapse": 1, "writeStep": 1,
+        				   "outSpecies": outSpecies, "initialDens": 1e2, "initialTemp":10.0,
+        				   "maxTemp":1e5, "finalTime":6.0e6, "radfield" : 1.0,
+        				   "zeta" : 1.0, "rout" : 0.05, "baseAv" : 1.0,
+        				   "outputFile":"../output/collapse_outputs/{}.dat".format(density),
+        				   "abundSaveFile":"../output/collapse_outputs/start{}.dat".format(density)}
+        paramlist=list(itertools.product(allv,alldensity,allvisex,allcrir,alluv))	
+        pool=Pool(32)
+        res=pool.map(shocking,paramlist)
+    	
+#rungrid()	
+plotshocks(40,1e5)
+#avgAbundance()
+f.close()
+print(count)
+print("computation took {} s".format(tm.time()-start))
+"""server=sp.SMTP("localhost")
+server.set_debuglevel(1)
+server.sendmail(sender,rcvr,"1 done after {} s".format(tm.time()-start))
+server.close()"""

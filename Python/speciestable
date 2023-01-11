@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug 25 13:06:58 2022
+
+@author: neerbos
+"""
+import uclchem
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn
+
+#set a parameter dictionary for phase 1 collapse model
+pc,year=30.9E12,3.15e7 #in km, s
+alldensity=[1e3,1e4,1e5,1e6]
+allv=[5,10,15,20,25,30,35,40,45,50,55,60]
+allcrir,alluv=[0.1,1,10,100],[0.1,1,10,100] #crir=cosmic ray ion rate uv in Habing
+
+dens,vel=1e5,10
+hoi=uclchem.analysis.read_output_file("../output/shocks_output/Cshock{}-{}-1-1.dat".format(dens,vel))
+uclchem.analysis()

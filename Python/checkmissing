@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Wed May  4 11:40:42 2022
+
+@author: neerbos
+"""
+#import uclchem
+import pandas as pd
+import matplotlib.pyplot as plt
+import time as tm
+import numpy as np
+import smtplib as sp
+import uclchem
+
+f=open("/net/harbinger/data2/bowie/UCLCHEM/src/Makefile","r")
+for line in f:
+    if line.startswith("PHYSICS="):
+        module=line[8:-5]
+if module=="cshock":
+    name = "C"
+elif module =="jshock":
+    name = "J"
+else:
+    name = module
+print(name)
+f.close()
+#set a parameter dictionary for phase 1 collapse model
+pc,year=30.9E12,3.15e7 #in km, s
+outSpecies="SO CO"
+density,vs=1e3,30
+alldensity=[1e3,1e4,1e5,1e6]
+allv=[10,15,20,25,30,35,40,45,50,55,60]
+allcrir,allvisex=[0.1,1,10,100],[1,2,5,10] #crir=cosmic ray ion rate, visex=visual extinction
+alluv=[0.1,1,10,100] #in Habing
+dec,vec,crc,vic,uvc=[],[],[],[],[]
+missing=0
+for density in alldensity:
+        for av in allvisex:
+            for vs in allv:
+                for crir in allcrir:
+                    for uv in alluv:
+                        file="../output/shock_outputs/{}:{}-{}-{}-{}-{}.dat".format(name,vs,density,av,crir,uv)
+                        try:
+                            f=open(file)
+                            phase2_df=uclchem.read_output_file(file)
+                            if np.max(phase2_df["gasTemp"])>=90000:
+                                dec.append(density)
+                                vec.append(vs)
+                                crc.append(crir)
+                                vic.append(av)
+                                uvc.append(uv)
+                                
+                            f.close()
+                        except:
+                            #print(file)
+                            missing+=1
+                            dec.append(density)
+                            vec.append(vs)
+                            crc.append(crir)
+                            vic.append(av)
+                            uvc.append(uv)
+for uv in alluv:
+    print("uv {}: {}".format(uv,uvc.count(uv)))
+for vs in allv:
+    print("vs {}: {}".format(vs,vec.count(vs)))
+for density in alldensity:
+    print("dens {}: {}".format(density,dec.count(density)))
+for av in allvisex:
+    print("visex {}: {}".format(av,vic.count(av)))
+for crir in allcrir:
+    print("crir {}: {}".format(crir,crc.count(uv)))          
+print(missing)
+                            
+                        
+                        
+                        
