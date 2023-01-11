@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Sep 30 13:17:20 2022
+
+@author: neerbos
+"""
+import sys
+import inspect
+
+#import uclchem
+#print (sys.path)
+#print(inspect.getfile(uclchem))
+j=1
+for i in range(1,100000000000000000000000000000000000000000000):
+    j+=1
+    print(j, "screen sucks")
+    
+    
+""" /net/harbinger/data2/bowie/UCLCHEM2/scripts
+/usr/lib64/python36.zip
+/software/rhel7/lib64/python3.6/site-packages
+/usr/lib64/python3.6
+/usr/lib64/python3.6/lib-dynload
+/home/neerbos/.local/lib/python3.6/site-packages
+/usr/lib64/python3.6/site-packages
+/usr/lib/python3.6/site-packages
+/home/neerbos/.local/lib/python3.10/site-packages/uclchem/__init__.py
+"""
+""" /net/harbinger/data2/bowie/UCLCHEM2/scripts
+/usr/lib64/python36.zip
+/software/rhel7/lib64/python3.6/site-packages
+/usr/lib64/python3.6
+/usr/lib64/python3.6/lib-dynload
+/home/neerbos/.local/lib/python3.6/site-packages
+/usr/lib64/python3.6/site-packages
+/usr/lib/python3.6/site-packages
+/home/neerbos/.local/lib/python3.10/site-packages/uclchem/__init__.py
+"""

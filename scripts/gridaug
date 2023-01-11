@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue May 17 12:04:47 2022
+
+@author: neerbos
+"""
+import uclchem
+import matplotlib.pyplot as plt
+import numpy as np
+from multiprocessing import Pool
+import itertools
+
+pc,year=30.9E17,3.15e7 #in cm, s
+out_species=["SO","CO"]
+
+alldensity=[1e6,1e5,1e4,1e3]
+param_dict = {"initialDens": 1e2, "initialTemp":10.0,
+				    "finalTime":6.0e6, "radfield" : 1.0,"endAtFinalDensity":True,
+				   "zeta" : 1.0, "rout" : 0.05, "baseAv" : 1.0, "freefall":True}
+def rout(density):
+    if density <= 1e4:
+        Av=10
+    else:
+        Av=30
+    #print(density,Av)
+    return 1.8*10**21*Av/(density*pc) #calculates the rout in pc corresponding to the desired density, 
+    #choose a fitting Av for that density (10/30 for 10^3-4 / 10^5-6  respectively)
+    
+def Av(density):#returns the Av value at the end of the corresponding collapse file
+    result_df=uclchem.analysis.read_output_file("../output/collapse_outputs/{}.0.dat".format(density))
+    Av=result_df["av"].iat[-1]
+    return Av
+    
+def collapse():
+    for density in alldensity:            
+
+        param_dict["finalDens"]=density	#change for specific model no; 1e3,4,5 or 6
+        param_dict["rout"]=rout(density)
+        param_dict["outputFile"]="../output/collapse_outputs/{}.dat".format(density)
+        param_dict["abundSaveFile"]="../output/collapse_outputs/start{}.dat".format(density)
+        uclchem.model.cloud(param_dict=param_dict)
+    print(density, rout(density))
+    
+def abundances(dens):
+    result_df=uclchem.analysis.read_output_file("../output/collapse_outputs/{}.dat".format(dens))
+    result_df.head() 
+    conservation=uclchem.analysis.check_element_conservation(result_df,element_list=["H","N","C","O","S"])
+    print("Percentage change in total abundances:")
+    print(conservation)
+    species=["H","H2","$H","$H2","H2O","$H2O","CO","$CO","$CH3OH","CH3OH"]
+    fig,ax=uclchem.analysis.create_abundance_plot(result_df,species,figsize=(10,7))
+    ax=ax.set(xscale="log",ylim=(1e-15,1),xlim=(1e3,1e6))
+    #ax.plot()
+    plt.show()
+    fig,ax=plt.subplots()
+    ax.plot(result_df["Time"],np.log(result_df["av"]))
+    ax2=ax.twinx()
+    ax2.plot(result_df["Time"],np.log(result_df["Density"]),color="red")
+    print("av:", result_df["av"].iat[-1])
+    
+def test(dens):
+    result_df=uclchem.analysis.read_output_file("../output/collapse_outputs/{}.dat".format(dens))
+    print(result_df.head())
+    conservation=uclchem.analysis.check_element_conservation(result_df,element_list=["H","N","C","O","S"])
+    print("Percentage change in total abundances:")
+    print(conservation)
+    species=["H","H2","$H","$H2","H2O","$H2O","CO","$CO","$CH3OH","CH3OH"]
+    fig,ax=uclchem.analysis.create_abundance_plot(result_df,species,figsize=(10,7))
+    ax=ax.set(xscale="log",ylim=(1e-15,1),xlim=(1e3,1e6))
+    
+def shock(params,run=True,dist=True,plot=False): #add support for crir, uv later
+    #change other bits of input to set up phase 2
+    dens,vel,shock=params[0],params[1],params[2]
+    param_dict["initialDens"]=dens
+    param_dict["freefall"]=False
+    param_dict["finalTime"]=1e6
+    param_dict["endAtFinalDensity"]=False
+    param_dict["rout"]=rout(dens) #make sure to set this, otherwise Av not consistent
+    if "abundSaveFile" in param_dict:
+        param_dict.pop("abundSaveFile")
+    param_dict["abundLoadFile"]="../output/collapse_outputs/start{}.dat".format(dens)
+    param_dict["outputFile"]="../output/shocks_output/{}shock{}-{}-1-1.dat".format(shock,dens,vel)
+    #dissipation_time= uclchem.utils.cshock_dissipation_time(vel,dens)
+    #print (dissipation_time)
+    #param_dict["finalTime"]=25*dissipation_time  
+
+    if shock == "C":
+        if run:
+            result=uclchem.model.cshock(shock_vel=vel,param_dict=param_dict)
+
+        phase2_df=uclchem.analysis.read_output_file("../output/shocks_output/Cshock{}-{}-1-1.dat".format(dens,vel))
+    if shock == "J":
+        if run:
+            result=uclchem.model.jshock(shock_vel=vel,param_dict=param_dict)
+        
+        phase2_df=uclchem.analysis.read_output_file("../output/shocks_output/Jshock{}-{}-1-1.dat".format(dens,vel))
+        uclchem.analysis.check_element_conservation(phase2_df)
+    if plot:
+        species=["CO","H2O","CH3OH","NH3","$CO","$H2O","$CH3OH","$NH3"]
+        species=["H2O","CH3OH","SO"]
+        if dist:
+            timetodist=year*vel*1E5  #as to convert the time in years to distance in pc
+            phase2_df["Time"]*=timetodist
+            xlabel= "distance / pc"
+        else:
+            timetodist=1
+            xlabel="time / year"
+        fig,[ax,ax2]=plt.subplots(1,2,figsize=(16,9))
+        ax=uclchem.analysis.plot_species(ax,phase2_df,species)
+        settings=ax.set(yscale="log",
+                    xlabel=xlabel, 
+                    ylabel="Fractional Abundance",xscale="log")
+    
+        ax2.plot(phase2_df["Time"],phase2_df["Density"],color="black")
+        ax2.set(xscale="log",yscale="log")
+        ax3=ax2.twinx()
+        ax3.plot(phase2_df["Time"],phase2_df["gasTemp"],color="red")
+        ax2.set(xlabel=xlabel,ylabel="Density")
+        ax3.set(ylabel="Temperature",facecolor="red")#,xlim=(timetodist,25*dissipation_time*timetodist))
+        ax3.tick_params(axis='y', colors='red')
+        plt.title("{}shock v={} rho={}".format(shock,vel,dens))
+        plt.show()
+def allshocks(params):
+    shock=0
+    dens,vel=params[0],params[1]
+    shock(dens,vel)
+                
+                
+def rungrid():
+    if __name__ == "__main__":
+        alldensity=[1e3,1e4,1e5,1e6]
+        allv=[5,10,15,20,25,30,35,40,45,50,55,60]
+        types=["C","J"]
+        allcrir,allvisex=[0.1,1,10,100],[1,2,5,10] #crir=cosmic ray ion rate, visex=visual extinction
+        alluv=[0.1,1,10,100] #in Habing
+
+        paramlist=list(itertools.product(alldensity,allv,types))	
+        pool=Pool(32)
+        res=pool.map(shock,paramlist)
+
+
+#collapse()
+
+#rungrid()
+for density in alldensity:
+    print("rout:", rout(density))
+#    abundances(density)
+shock([1e6,14,"C"],run=True,dist = True)

@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Mar  4 10:56:33 2022
+
+@author: neerbos
+
+need to run a loop and save several different files.
+"""
+import uclchem
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+
+#set a parameter dictionary for phase 1 collapse model
+pc,year=30.9E17,365.25*86400 #cm, s resp
+name,vs,density="C",45,100000.0
+av,crir,uv=1,1,1
+
+alldensity=[1e3,1e4,1e5,1e6]
+#allv=[10,15,20,25,30,35,40,45,50,55,60]
+allv=[5,6,7,8,9,10,11,12,13,14,15]
+allvisex=[1,2,5,10]
+allcrir=[0.1,1,10,100] #crir=cosmic ray ion rate, visex=visual extinction
+alluv=[0.1,1,10,100]
+#uclchem.run_model(param_dict)
+
+def rout(density):
+    if density <= 1e4:
+        Av=10
+    else:
+        Av=30
+    #print(density,Av)
+    return 1.8*10**21*Av/(density*pc) #calculates the rout in pc corresponding to the desired density, 
+    #choose a fitting Av for that density (10/30 for 10^3-4 / 10^5-6  respectively)
+def abundens(vs,density,crir,uv,save=False,log=True,time=1E5,cm=False):
+    for name in ["C","J"]:
+        if cm:
+            pc=1
+            label="cm"
+        else:
+            pc=30.9E17
+            label="zn/pc"
+        file="../output/shocks_output/{}shock{}-{}-1-1.dat".format(name,density,vs,crir,uv)
+        phase2_df=uclchem.analysis.read_output_file(file)
+        species=["NH3","H2S","OCS","CH3OH","H2O","HCL","HCO"]
+        #species=["H2"]
+        try:
+            print(np.max(np.where((phase2_df["Time"])>=1E6)))
+        except:
+            print("dtime {} dlength {}".format(12*pc/(1E5*density*year),12*vs/density))
+        if log:
+            scale="log"
+            beginat=1E-3
+        else:
+            scale="linear"
+            beginat=-20
+        fig,[ax,ax2]=plt.subplots(2,1,figsize=(16,9))
+        ax=uclchem.analysis.plot_species(ax,phase2_df,species)
+        settings=ax.set(yscale=scale,xscale=scale,
+                    xlabel="time in yr", 
+                    ylabel="X$_{Species}$",
+                    xlim=(beginat,time))
+        ax4=ax.twiny()
+        ax.grid()
+        halfmax=np.min(np.where(phase2_df["Density"]>=0.5*(np.max(phase2_df["Density"]-density))+density))
+        time1=phase2_df["Time"][halfmax]
+        time2=time1+1E8/density
+        ax.axvline(time1,c="black",alpha=0.5)
+        ax2.axvline(time1,c="black",alpha=0.5)
+        ax.axvline(time2,c="black",alpha=0.5)
+        ax2.axvline(time2,c="black",alpha=0.5)
+        ax4.plot(phase2_df["Time"]*year*vs*1E5/pc,phase2_df["HCL"],alpha=0)
+        ax4.set(xlabel=label,xscale=scale,yscale="log",xlim=(beginat*year*vs*1E5/pc,time*year*vs*1E5/pc))
+        ax2.plot(phase2_df["Time"],phase2_df["Density"],color="black")
+        ax3=ax2.twinx()
+        ax3.plot(phase2_df["Time"],phase2_df["gasTemp"],color="red")
+        ax2.set(xlabel="Time / year",ylabel="Density")
+        ax3.set(ylabel="Temperature",facecolor="red",xscale=scale,yscale = "linear",xlim=(beginat,time))
+        ax3.tick_params(axis='y', colors='red')
+        ax2.grid()
+        props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+        text="shock:{} \nspeed:{} km/s \ndensity:10^{} $n_H$/cm^3\nvisex:{} \ncrir:{} * standard\nuv:{} Ha".format(name,vs,np.log10(density),av,crir,uv)
+        ax2.text(0.7,-0.5,text,transform=ax.transAxes, fontsize=14,
+                verticalalignment='top', bbox=props)
+        if save:
+            plt.savefig("../output/figures/abundens_{}:{}-{}-{}-{}-{}.png".format(name,vs,int(density),av,crir,uv))
+        else:
+            plt.show()
+            
+def plotav(name,vs,density,av,crir,uv):
+    file="../output/collapse_outputs/{}.dat".format(density)
+    file2="../output/shocks_output/{}shock{}-{}-1-1.dat".format(name,density,vs)
+    phase1_df=uclchem.analysis.read_output_file(file) 
+    phase2_df=uclchem.analysis.read_output_file(file2)    
+    plt.plot(phase2_df["Time"],phase2_df["av"])
+    plt.show()
+def plotall(save = False):
+    for density in alldensity:
+        for vs in allv:
+            abundens(vs,density,av,crir,uv,log=True,time=1E6,save=save)#6*uclchem.utils.cshock_dissipation_time(vs, density))
+
+#plotav(name,vs,density,av,crir,uv)
+#6*uclchem.utils.cshock_dissipation_time(vs, density))
+#abundens(vs,density,av,crir,uv,log=True,time=1,cm=True)
+abundens(15,1E5,1,1,save=False,log=True,time=1E6)
+#    abundens(vs,density,av,crir,uv,save=False)
+#plotall(save=True)
